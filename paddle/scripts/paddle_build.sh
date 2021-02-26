@@ -200,7 +200,7 @@ function cmake_base() {
     fi
 
     if [ "$SYSTEM" == "Darwin" ]; then
-        WITH_DISTRIBUTE=${WITH_DISTRIBUTE:-ON}
+        WITH_DISTRIBUTE="OFF"
         WITH_AVX=${WITH_AVX:-ON}
         INFERENCE_DEMO_INSTALL_DIR=${INFERENCE_DEMO_INSTALL_DIR:-~/.cache/inference_demo}
     else
@@ -208,13 +208,8 @@ function cmake_base() {
     fi
 
     distibuted_flag=${WITH_DISTRIBUTE:-OFF}
-    grpc_flag=${WITH_GRPC:-${distibuted_flag}}
-
-    if [ "$SYSTEM" == "Darwin" ]; then
-        gloo_flag="OFF"
-    else
-        gloo_flag=${distibuted_flag}
-    fi
+    grpc_flag="OFF"
+    gloo_flag=${distibuted_flag}
 
     cat <<EOF
     ========================================
@@ -241,10 +236,11 @@ function cmake_base() {
         -DPY_VERSION=${PY_VERSION:-2.7}
         -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/paddle/build}
         -DWITH_GRPC=${grpc_flag}
-	    -DWITH_GLOO=${gloo_flag}
+        -DWITH_PSCORE=${distibuted_flag}
+        -DWITH_GLOO=${gloo_flag}
         -DWITH_LITE=${WITH_LITE:-OFF}
         -DWITH_XPU=${WITH_XPU:-OFF}
-        -DLITE_GIT_TAG=develop
+        -DLITE_GIT_TAG=release/v2.8
     ========================================
 EOF
     # Disable UNITTEST_USE_VIRTUALENV in docker because
@@ -274,8 +270,9 @@ EOF
         -DPY_VERSION=${PY_VERSION:-2.7} \
         -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/paddle/build} \
         -DWITH_GRPC=${grpc_flag} \
-	    -DWITH_GLOO=${gloo_flag} \
-        -DLITE_GIT_TAG=develop \
+        -DWITH_PSCORE=${distibuted_flag} \
+        -DWITH_GLOO=${gloo_flag} \
+        -DLITE_GIT_TAG=release/v2.8 \
         -DWITH_XPU=${WITH_XPU:-OFF} \
         -DWITH_LITE=${WITH_LITE:-OFF};build_error=$?
     if [ "$build_error" != 0 ];then

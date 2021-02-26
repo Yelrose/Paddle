@@ -70,30 +70,40 @@ namespace platform {
  *    }
  *
 */
-#define CUDA_KERNEL_LOOP(i, num)                             \
+
+#define CUDA_KERNEL_LOOP_TYPE(i, num, index_type)            \
   int64_t __index__ = blockIdx.x * blockDim.x + threadIdx.x; \
-  for (int i = __index__; __index__ < (num);                 \
+  for (index_type i = __index__; __index__ < (num);          \
        __index__ += blockDim.x * gridDim.x, i = __index__)
+
+#define CUDA_KERNEL_LOOP(i, num) CUDA_KERNEL_LOOP_TYPE(i, num, int)
 
 class CublasHandleHolder {
  public:
   CublasHandleHolder(cudaStream_t stream, cublasMath_t math_type) {
-    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::cublasCreate(&handle_));
-    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::cublasSetStream(handle_, stream));
+    PADDLE_RETRY_CUDA_SUCCESS(dynload::cublasCreate(&handle_));
+    PADDLE_RETRY_CUDA_SUCCESS(dynload::cublasSetStream(handle_, stream));
 #if CUDA_VERSION >= 9000
     if (math_type == CUBLAS_TENSOR_OP_MATH) {
-      PADDLE_ENFORCE_CUDA_SUCCESS(
+      PADDLE_RETRY_CUDA_SUCCESS(
           dynload::cublasSetMathMode(handle_, CUBLAS_TENSOR_OP_MATH));
+#if CUDA_VERSION >= 11000
+    } else if (math_type == CUBLAS_TF32_TENSOR_OP_MATH) {
+      PADDLE_ENFORCE_CUDA_SUCCESS(
+          dynload::cublasSetMathMode(handle_, CUBLAS_TF32_TENSOR_OP_MATH));
+#endif  // CUDA_VERSION >= 11000
     }
-#endif
+#endif  // CUDA_VERSION >= 9000
   }
 
+  const cublasHandle_t& GetCublasHandle() const { return handle_; }
+
   ~CublasHandleHolder() PADDLE_MAY_THROW {
-    PADDLE_ENFORCE_CUDA_SUCCESS(dynload::cublasDestroy(handle_));
+    PADDLE_RETRY_CUDA_SUCCESS(dynload::cublasDestroy(handle_));
   }
 
   template <typename Callback>
-  inline void Call(Callback &&callback) const {
+  inline void Call(Callback&& callback) const {
     std::lock_guard<std::mutex> guard(mtx_);
     callback(handle_);
   }

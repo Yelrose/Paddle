@@ -1,7 +1,7 @@
 if (NOT APPLE AND NOT WIN32)
-    set(INFERENCE_EXTRA_DEPS paddle_fluid_shared)
+    set(INFERENCE_EXTRA_DEPS paddle_inference_shared)
 else()
-    set(INFERENCE_EXTRA_DEPS paddle_inference_api paddle_fluid_api ir_pass_manager analysis_predictor benchmark)
+    set(INFERENCE_EXTRA_DEPS paddle_inference_api paddle_inference_io ir_pass_manager analysis_predictor benchmark)
 endif()
 
 if(WITH_GPU AND TENSORRT_FOUND)
@@ -497,9 +497,12 @@ if(WITH_GPU AND TENSORRT_FOUND)
             EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} 
             ARGS --infer_model=${TEST_INSTANCE_NORM_MODEL}/)
     inference_analysis_test(test_analyzer_capi_gpu SRCS analyzer_capi_gpu_tester.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_fluid_c
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
             ARGS --infer_model=${TRT_MODEL_INSTALL_DIR}/trt_inference_test_models)
-     
+    inference_analysis_test(test_analyzer_capi_xpu SRCS analyzer_capi_xpu_tester.cc
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
+            ARGS --infer_model=${TRT_MODEL_INSTALL_DIR}/trt_inference_test_models)
+            
     set(TRT_MODEL_QUANT_RESNET_DIR "${INFERENCE_DEMO_INSTALL_DIR}/small_quant_model")
     if (NOT EXISTS ${TRT_MODEL_QUANT_RESNET_DIR}/small_quant_model.tgz)
         inference_download_and_uncompress(${INFERENCE_DEMO_INSTALL_DIR} ${INFERENCE_URL}/tensorrt_test "small_quant_model.tgz")
@@ -578,11 +581,11 @@ inference_analysis_test(lite_resnet50_test SRCS lite_resnet50_test.cc
         ARGS --infer_model=${RESNET50_MODEL_DIR})
 
 inference_analysis_test(test_analyzer_capi SRCS analyzer_capi_tester.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_fluid_c
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
             ARGS --infer_model=${RESNET50_MODEL_DIR}/model)
 
 inference_analysis_test(test_analyzer_capi_pd_tensor SRCS analyzer_capi_pd_tensor_tester.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_fluid_c
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
             ARGS --infer_model=${MOBILENET_INSTALL_DIR}/model)
 
 inference_analysis_test(test_analyzer_zerocopytensor_tensor SRCS analyzer_zerocopy_tensor_tester.cc
@@ -595,12 +598,12 @@ inference_analysis_test(test_analyzer_paddletensor_tensor SRCS analyzer_paddle_t
             
 if(WITH_MKLDNN)
   inference_analysis_test(test_analyzer_capi_int SRCS analyzer_capi_int_tester.cc
-            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_fluid_c
+            EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
             ARGS --infer_model=${INT8_DATA_DIR}/resnet50/model)
  endif()
 
 inference_analysis_test(test_analyzer_capi_ner SRCS analyzer_capi_ner_tester.cc 
-        EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_fluid_c
+        EXTRA_DEPS ${INFERENCE_EXTRA_DEPS} paddle_inference_c
         ARGS --infer_model=${CHINESE_NER_INSTALL_DIR}/model)
 
 if(WITH_GPU)
@@ -610,13 +613,13 @@ if(WITH_GPU)
 endif()
 
 if(WITH_GPU AND TENSORRT_FOUND)
-    set_tests_properties(trt_resnext_test PROPERTIES TIMEOUT 120)
-    set_tests_properties(trt_quant_int8_yolov3_r50_test PROPERTIES TIMEOUT 120)
-    set_tests_properties(trt_resnet50_test PROPERTIES TIMEOUT 120)
-    set_tests_properties(trt_cascade_rcnn_test PROPERTIES TIMEOUT 120)
-    set_tests_properties(test_trt_dynamic_shape_ernie_ser_deser PROPERTIES TIMEOUT 120)
-    set_tests_properties(test_trt_dynamic_shape_ernie_fp16_ser_deser PROPERTIES TIMEOUT 120)
-    set_tests_properties(test_trt_dynamic_shape_ernie PROPERTIES TIMEOUT 120)
+    set_tests_properties(trt_resnext_test PROPERTIES TIMEOUT 300)
+    set_tests_properties(trt_quant_int8_yolov3_r50_test PROPERTIES TIMEOUT 300)
+    set_tests_properties(trt_resnet50_test PROPERTIES TIMEOUT 300)
+    set_tests_properties(trt_cascade_rcnn_test PROPERTIES TIMEOUT 300)
+    set_tests_properties(test_trt_dynamic_shape_ernie_ser_deser PROPERTIES TIMEOUT 300)
+    set_tests_properties(test_trt_dynamic_shape_ernie_fp16_ser_deser PROPERTIES TIMEOUT 300)
+    set_tests_properties(test_trt_dynamic_shape_ernie PROPERTIES TIMEOUT 300)
 endif()
 
 if(WITH_MKLDNN)
@@ -639,7 +642,9 @@ set_tests_properties(test_analyzer_bert PROPERTIES TIMEOUT 120)
 set_tests_properties(test_analyzer_mobilenet_depthwise_conv PROPERTIES TIMEOUT 120)
 if(WITH_GPU AND TENSORRT_FOUND)
     set_tests_properties(trt_mobilenet_test PROPERTIES TIMEOUT 120)
-    set_tests_properties(test_analyzer_bfloat16_resnet50 PROPERTIES TIMEOUT 120)
+    if(WITH_MKLDNN)
+        set_tests_properties(test_analyzer_bfloat16_resnet50 PROPERTIES TIMEOUT 120)
+    endif()
 endif()
 if(ON_INFER OR WITH_GPU)
     set_tests_properties(test_analyzer_transformer_profile PROPERTIES TIMEOUT 120)

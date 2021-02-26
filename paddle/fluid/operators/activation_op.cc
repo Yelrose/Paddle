@@ -219,13 +219,6 @@ $$out = \\frac{1}{\\sqrt{x}}$$
 
 )DOC";
 
-UNUSED constexpr char AbsDoc[] = R"DOC(
-Abs Operator.
-
-$$out = |x|$$
-
-)DOC";
-
 UNUSED constexpr char CeilDoc[] = R"DOC(
 Ceil Operator. Computes ceil of x element-wise.
 
@@ -705,7 +698,6 @@ REGISTER_ACTIVATION_OP_MAKER(Tanh, TanhDoc);
 REGISTER_ACTIVATION_OP_MAKER(TanhShrink, TanhShrinkDoc);
 REGISTER_ACTIVATION_OP_MAKER(Sqrt, SqrtDoc);
 REGISTER_ACTIVATION_OP_MAKER(Rsqrt, RsqrtDoc);
-REGISTER_ACTIVATION_OP_MAKER(Abs, AbsDoc);
 REGISTER_ACTIVATION_OP_MAKER(Ceil, CeilDoc);
 REGISTER_ACTIVATION_OP_MAKER(Floor, FloorDoc);
 REGISTER_ACTIVATION_OP_MAKER(Cos, CosDoc);
@@ -783,26 +775,6 @@ class ActivationOpDoubleGrad2 : public framework::OperatorWithKernel {
   }
 };
 
-// AbsGrad: dx=dy if x >=0 else -dy
-// AbsDoubleGrad: ddy = ddx if x >=0 else -ddx
-template <typename T>
-class AbsDoubleGradMaker : public ::paddle::framework::SingleGradOpMaker<T> {
- public:
-  using ::paddle::framework::SingleGradOpMaker<T>::SingleGradOpMaker;
-
- protected:
-  void Apply(GradOpPtr<T> op) const override {
-    op->SetType("abs_grad_grad");
-    // input1: x
-    op->SetInput("X", this->Input("X"));
-    // input2: ddx
-    op->SetInput("DDX", this->OutputGrad(framework::GradVarName("X")));
-    op->SetAttrMap(this->Attrs());
-    // output: ddy
-    op->SetOutput("DDOut", this->InputGrad(framework::GradVarName("Out")));
-  }
-};
-
 // ReluGrad: dx = dy if y >= 0 else 0
 // ReluGradGrad: ddy = ddx if y >= 0 else 0
 template <typename T>
@@ -877,6 +849,25 @@ class SqrtDoubleGradMaker : public ::paddle::framework::SingleGradOpMaker<T> {
  protected:
   void Apply(GradOpPtr<T> op) const override {
     op->SetType("sqrt_grad_grad");
+    op->SetInput("Out", this->Input("Out"));
+    op->SetInput("DX", this->Output(framework::GradVarName("X")));
+    op->SetInput("DDX", this->OutputGrad(framework::GradVarName("X")));
+    op->SetAttrMap(this->Attrs());
+    op->SetOutput("DOut", this->InputGrad("Out"));
+    op->SetOutput("DDOut", this->InputGrad(framework::GradVarName("Out")));
+  }
+};
+
+// rsqrt Grad: dx = -0.5 * dy * y * y * y
+// rsqrt GradGrad: ddy = -0.5 * ddx * y * y * y, dy = (3/y) * ddx
+template <typename T>
+class RsqrtDoubleGradMaker : public ::paddle::framework::SingleGradOpMaker<T> {
+ public:
+  using ::paddle::framework::SingleGradOpMaker<T>::SingleGradOpMaker;
+
+ protected:
+  void Apply(GradOpPtr<T> op) const override {
+    op->SetType("rsqrt_grad_grad");
     op->SetInput("Out", this->Input("Out"));
     op->SetInput("DX", this->Output(framework::GradVarName("X")));
     op->SetInput("DDX", this->OutputGrad(framework::GradVarName("X")));
@@ -1157,6 +1148,35 @@ REGISTER_OP_CPU_KERNEL(
                               ops::SqrtGradGradFunctor<plat::float16>>);
 /* ========================================================================== */
 
+/* ===========================   rsqrt register  =============================
+ */
+REGISTER_OPERATOR(
+    rsqrt, ops::ActivationOp, ops::RsqrtOpMaker, ops::ActivationOpInferVarType,
+    ops::ActivationGradOpMaker<ops::RsqrtGradFunctor<float>::FwdDeps(),
+                               paddle::framework::OpDesc>,
+    ops::ActivationGradOpMaker<ops::RsqrtGradFunctor<float>::FwdDeps(),
+                               paddle::imperative::OpBase>,
+    ops::ActFwdInplaceInferer);
+REGISTER_OPERATOR(rsqrt_grad, ops::ActivationOpGrad,
+                  ops::ActivationGradOpInplaceInferer,
+                  ops::RsqrtDoubleGradMaker<paddle::framework::OpDesc>,
+                  ops::RsqrtDoubleGradMaker<paddle::imperative::OpBase>);
+REGISTER_OPERATOR(
+    rsqrt_grad_grad,
+    ops::ActivationOpDoubleGrad<ops::RsqrtGradGradFunctor<float>::FwdDeps()>,
+    ops::ActivationDoubleGradOpInplaceInferer);
+
+REGISTER_ACTIVATION_CPU_KERNEL(rsqrt, Rsqrt, RsqrtFunctor, RsqrtGradFunctor);
+REGISTER_OP_CPU_KERNEL(
+    rsqrt_grad_grad,
+    ops::RsqrtDoubleGradKernel<plat::CPUDeviceContext,
+                               ops::RsqrtGradGradFunctor<float>>,
+    ops::RsqrtDoubleGradKernel<plat::CPUDeviceContext,
+                               ops::RsqrtGradGradFunctor<double>>,
+    ops::RsqrtDoubleGradKernel<plat::CPUDeviceContext,
+                               ops::RsqrtGradGradFunctor<plat::float16>>);
+/* ========================================================================== */
+
 /* ==========================   square register  ============================ */
 REGISTER_OPERATOR(
     square, ops::ActivationOp, ops::SquareOpMaker,
@@ -1262,56 +1282,6 @@ REGISTER_OP_CPU_KERNEL(
                               ops::ExpGradFunctor<int>>,
     ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
                               ops::ExpGradFunctor<int64_t>>);
-/* ========================================================================== */
-
-/* ==========================   abs register  ============================ */
-REGISTER_OPERATOR(
-    abs, ops::ActivationOp, ops::AbsOpMaker, ops::ActivationOpInferVarType,
-    ops::ActivationGradOpMaker<ops::AbsGradFunctor<float>::FwdDeps(),
-                               paddle::framework::OpDesc>,
-    ops::ActivationGradOpMaker<ops::AbsGradFunctor<float>::FwdDeps(),
-                               paddle::imperative::OpBase>,
-    std::conditional<ops::CanInplaceAct<ops::AbsGradFunctor<float>>(),
-                     ops::ActFwdInplaceInferer, void>::type);
-REGISTER_OPERATOR(abs_grad, ops::ActivationOpGrad,
-                  ops::ActivationGradOpInplaceInferer,
-                  ops::AbsDoubleGradMaker<paddle::framework::OpDesc>,
-                  ops::AbsDoubleGradMaker<paddle::imperative::OpBase>);
-REGISTER_OPERATOR(
-    abs_grad_grad,
-    ops::ActivationOpDoubleGrad<ops::AbsGradGradFunctor<float>::FwdDeps()>,
-    ops::ActivationDoubleGradOpInplaceInferer);
-
-REGISTER_OP_CPU_KERNEL(abs,
-                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
-                                             ops::AbsFunctor<float>>,
-                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
-                                             ops::AbsFunctor<double>>,
-                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
-                                             ops::AbsFunctor<int>>,
-                       ops::ActivationKernel<paddle::platform::CPUDeviceContext,
-                                             ops::AbsFunctor<int64_t>>);
-REGISTER_OP_CPU_KERNEL(
-    abs_grad, ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
-                                        ops::AbsGradFunctor<float>>,
-    ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
-                              ops::AbsGradFunctor<double>>,
-    ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
-                              ops::AbsGradFunctor<int>>,
-    ops::ActivationGradKernel<paddle::platform::CPUDeviceContext,
-                              ops::AbsGradFunctor<int64_t>>);
-REGISTER_OP_CPU_KERNEL(
-    abs_grad_grad,
-    ops::ActivationDoubleGradKernel<plat::CPUDeviceContext,
-                                    ops::AbsGradGradFunctor<float>>,
-    ops::ActivationDoubleGradKernel<plat::CPUDeviceContext,
-                                    ops::AbsGradGradFunctor<double>>,
-    ops::ActivationDoubleGradKernel<plat::CPUDeviceContext,
-                                    ops::AbsGradGradFunctor<plat::float16>>,
-    ops::ActivationDoubleGradKernel<plat::CPUDeviceContext,
-                                    ops::AbsGradGradFunctor<int>>,
-    ops::ActivationDoubleGradKernel<plat::CPUDeviceContext,
-                                    ops::AbsGradGradFunctor<int64_t>>);
 /* ========================================================================== */
 
 /* ==========================  Log register ==================================*/

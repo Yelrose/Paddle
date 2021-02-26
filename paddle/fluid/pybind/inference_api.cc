@@ -69,7 +69,8 @@ void BindMkldnnQuantizerConfig(py::module *m);
 #endif
 
 template <typename T>
-PaddleBuf PaddleBufCreate(py::array_t<T> data) {
+PaddleBuf PaddleBufCreate(
+    py::array_t<T, py::array::c_style | py::array::forcecast> data) {
   PaddleBuf buf(data.size() * sizeof(T));
   std::copy_n(static_cast<const T *>(data.data()), data.size(),
               static_cast<T *>(buf.data()));
@@ -77,7 +78,9 @@ PaddleBuf PaddleBufCreate(py::array_t<T> data) {
 }
 
 template <typename T>
-void PaddleBufReset(PaddleBuf &buf, py::array_t<T> data) {  // NOLINT
+void PaddleBufReset(
+    PaddleBuf &buf,                                                    // NOLINT
+    py::array_t<T, py::array::c_style | py::array::forcecast> data) {  // NOLINT
   buf.Resize(data.size() * sizeof(T));
   std::copy_n(static_cast<const T *>(data.data()), data.size(),
               static_cast<T *>(buf.data()));
@@ -85,7 +88,8 @@ void PaddleBufReset(PaddleBuf &buf, py::array_t<T> data) {  // NOLINT
 
 template <typename T>
 PaddleTensor PaddleTensorCreate(
-    py::array_t<T> data, const std::string name = "",
+    py::array_t<T, py::array::c_style | py::array::forcecast> data,
+    const std::string name = "",
     const std::vector<std::vector<size_t>> &lod = {}, bool copy = true) {
   PaddleTensor tensor;
 
@@ -137,8 +141,9 @@ py::array PaddleTensorGetData(PaddleTensor &tensor) {  // NOLINT
 }
 
 template <typename T>
-void ZeroCopyTensorCreate(ZeroCopyTensor &tensor,  // NOLINT
-                          py::array_t<T> data) {
+void ZeroCopyTensorCreate(
+    ZeroCopyTensor &tensor,  // NOLINT
+    py::array_t<T, py::array::c_style | py::array::forcecast> data) {
   std::vector<int> shape;
   std::copy_n(data.shape(), data.ndim(), std::back_inserter(shape));
   tensor.Reshape(std::move(shape));
@@ -146,8 +151,9 @@ void ZeroCopyTensorCreate(ZeroCopyTensor &tensor,  // NOLINT
 }
 
 template <typename T>
-void PaddleInferTensorCreate(paddle_infer::Tensor &tensor,  // NOLINT
-                             py::array_t<T> data) {
+void PaddleInferTensorCreate(
+    paddle_infer::Tensor &tensor,  // NOLINT
+    py::array_t<T, py::array::c_style | py::array::forcecast> data) {
   std::vector<int> shape;
   std::copy_n(data.shape(), data.ndim(), std::back_inserter(shape));
   tensor.Reshape(std::move(shape));
@@ -363,7 +369,8 @@ void BindPaddlePlace(py::module *m) {
   py::enum_<PaddlePlace>(*m, "PaddlePlace")
       .value("UNK", PaddlePlace::kUNK)
       .value("CPU", PaddlePlace::kCPU)
-      .value("GPU", PaddlePlace::kGPU);
+      .value("GPU", PaddlePlace::kGPU)
+      .value("XPU", PaddlePlace::kXPU);
 }
 
 void BindPaddlePredictor(py::module *m) {
@@ -392,6 +399,7 @@ void BindNativeConfig(py::module *m) {
   py::class_<NativeConfig, PaddlePredictor::Config>(*m, "NativeConfig")
       .def(py::init<>())
       .def_readwrite("use_gpu", &NativeConfig::use_gpu)
+      .def_readwrite("use_xpu", &NativeConfig::use_xpu)
       .def_readwrite("device", &NativeConfig::device)
       .def_readwrite("fraction_of_gpu_memory",
                      &NativeConfig::fraction_of_gpu_memory)
@@ -453,7 +461,9 @@ void BindAnalysisConfig(py::module *m) {
            py::arg("l3_workspace_size"))
       .def("disable_gpu", &AnalysisConfig::DisableGpu)
       .def("use_gpu", &AnalysisConfig::use_gpu)
+      .def("use_xpu", &AnalysisConfig::use_xpu)
       .def("gpu_device_id", &AnalysisConfig::gpu_device_id)
+      .def("xpu_device_id", &AnalysisConfig::xpu_device_id)
       .def("memory_pool_init_size_mb",
            &AnalysisConfig::memory_pool_init_size_mb)
       .def("fraction_of_gpu_memory_for_pool",
@@ -489,6 +499,9 @@ void BindAnalysisConfig(py::module *m) {
            py::arg("disable_trt_plugin_fp16") = false)
       .def("enable_tensorrt_oss", &AnalysisConfig::EnableTensorRtOSS)
       .def("tensorrt_oss_enabled", &AnalysisConfig::tensorrt_oss_enabled)
+      .def("enable_tensorrt_dla", &AnalysisConfig::EnableTensorRtDLA,
+           py::arg("dla_core") = 0)
+      .def("tensorrt_dla_enabled", &AnalysisConfig::tensorrt_dla_enabled)
       .def("tensorrt_engine_enabled", &AnalysisConfig::tensorrt_engine_enabled)
       .def("enable_lite_engine", &AnalysisConfig::EnableLiteEngine,
            py::arg("precision_mode") = AnalysisConfig::Precision::kFloat32,
@@ -521,7 +534,10 @@ void BindAnalysisConfig(py::module *m) {
            [](AnalysisConfig &self, const std::string &pass) {
              self.pass_builder()->DeletePass(pass);
            })
-      .def("pass_builder", &AnalysisConfig::pass_builder,
+      .def("pass_builder",
+           [](AnalysisConfig &self) {
+             return dynamic_cast<PaddlePassBuilder *>(self.pass_builder());
+           },
            py::return_value_policy::reference);
 }
 

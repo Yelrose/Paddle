@@ -298,13 +298,15 @@ class Callback(object):
 
 class ProgBarLogger(Callback):
     """
-    Logger callback function.
+    Logger callback function to print loss and metrics to stdout. It supports
+    silent mode (not print), progress bar or one line per each printing,
+    see arguments for more detailed.
 
     Args:
         log_freq (int): The frequency, in number of steps,
             the logs such as loss, metrics are printed. Default: 1.
         verbose (int): The verbosity mode, should be 0, 1, or 2.
-            0 = silent, 1 = progress bar, 2 = one line per epoch, 3 = 2 + 
+            0 = silent, 1 = progress bar, 2 = one line each printing, 3 = 2 +
             time counter, such as average reader cost, samples per second. 
             Default: 2.
 
@@ -531,7 +533,9 @@ class ProgBarLogger(Callback):
 
 class ModelCheckpoint(Callback):
     """
-    Model checkpoint callback function.
+    Model checkpoint callback function to save model weights and optimizer
+    state during training in conjunction with model.fit(). Currently,
+    ModelCheckpoint only supports saving after a fixed number of epochs.
 
     Args:
         save_freq(int): The frequency, in number of epochs, the model checkpoint
@@ -714,7 +718,7 @@ class EarlyStopping(Callback):
             from paddle.vision.models import LeNet
             from paddle.vision.datasets import MNIST
             from paddle.metric import Accuracy
-            from paddle.nn.layer.loss import CrossEntropyLoss
+            from paddle.nn import CrossEntropyLoss
             import paddle.vision.transforms as T
 
             device = paddle.set_device('cpu')
@@ -772,7 +776,8 @@ class EarlyStopping(Callback):
         self.best_weights = None
         self.stopped_epoch = 0
         self.save_best_model = save_best_model
-        self.save_dir = None  # `save_dir` is get from `config_callbacks`
+        # The value of `save_dir` is set in function `config_callbacks`
+        self.save_dir = None
         if mode not in ['auto', 'min', 'max']:
             warnings.warn('EarlyStopping mode %s is unknown, '
                           'fallback to auto mode.' % mode)

@@ -159,6 +159,7 @@ def for_enumerate_var_numpy_with_start_continue(x_array):
 def for_iter_var(x_array):
     z = fluid.layers.fill_constant([1], 'int32', 0)
     x_array = fluid.dygraph.to_variable(x_array)
+
     for x in x_array:
         z = z + x
     return z
@@ -219,6 +220,68 @@ def for_enumerate_var_with_nested_range(x_array):
         for idx in range(num):
             x = x + num
     return x
+
+
+# 16. for iter var[idx]
+@paddle.jit.to_static
+def for_iter_var_idx(x_array):
+    z = fluid.layers.fill_constant([1], 'int32', 0)
+    x_array = fluid.dygraph.to_variable(x_array)
+
+    for x in x_array[0:]:
+        z = z + x
+    return z
+
+
+@paddle.jit.to_static
+def for_tuple_as_iter_var(x_array):
+    x = paddle.to_tensor(x_array)
+    z = paddle.to_tensor(np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3]]))
+
+    a_result = paddle.zeros([3])
+    b_result = paddle.zeros([3])
+    c_result = paddle.zeros([3])
+
+    for a, b, c in z:
+        a_result += a
+        b_result += b
+        c_result += c
+
+    return a_result, b_result, c_result
+
+
+@paddle.jit.to_static
+def for_tuple_as_enumerate_iter(x_array):
+    x = paddle.to_tensor(x_array)
+    x_list = [x, x, x]
+
+    a_result = paddle.zeros([5])
+
+    for t in enumerate(x_list):
+        a_result += t[1]
+
+    return a_result
+
+
+@paddle.jit.to_static
+def for_tuple_as_enumerate_value(x_array):
+    x = paddle.to_tensor(x_array)
+    x_list = [x, x, x]
+
+    a_result = paddle.zeros([1])
+    b_result = paddle.zeros([1])
+    c_result = paddle.zeros([1])
+    d_result = paddle.zeros([1])
+    e_result = paddle.zeros([1])
+
+    for i, (a, b, c, d, e) in enumerate(x_list):
+        a_result += a
+        b_result += b
+        c_result += c
+        d_result += d
+        e_result += e
+
+    return a_result
 
 
 class TestTransformBase(unittest.TestCase):
@@ -343,6 +406,11 @@ class TestForIterVar(TestForIterVarNumpy):
         self.dygraph_func = for_iter_var
 
 
+class TestForIterVarIdx(TestForIterVarNumpy):
+    def set_test_func(self):
+        self.dygraph_func = for_iter_var_idx
+
+
 class TestForEnumerateVar(TestForIterVarNumpy):
     def set_test_func(self):
         self.dygraph_func = for_enumerate_var
@@ -361,6 +429,21 @@ class TestForIterVarList(TestForInRange):
 class TestForEnumerateVarList(TestForInRange):
     def set_test_func(self):
         self.dygraph_func = for_enumerate_var_list
+
+
+class TestForTupleAsIterVar(TestForIterVarNumpy):
+    def set_test_func(self):
+        self.dygraph_func = for_tuple_as_iter_var
+
+
+class TestForTupleAsEnumerateIter(TestForIterVarNumpy):
+    def set_test_func(self):
+        self.dygraph_func = for_tuple_as_enumerate_iter
+
+
+class TestForTupleAsEnumerateValue(TestForIterVarNumpy):
+    def set_test_func(self):
+        self.dygraph_func = for_tuple_as_enumerate_value
 
 
 if __name__ == '__main__':

@@ -16,8 +16,9 @@ list(APPEND DIST_TEST_OPS test_parallel_dygraph_sparse_embedding)
 list(APPEND DIST_TEST_OPS test_parallel_dygraph_sparse_embedding_over_height)
 list(APPEND DIST_TEST_OPS test_parallel_dygraph_transformer)
 list(APPEND DIST_TEST_OPS test_fleet_pipeline_meta_optimizer)
-list(APPEND DIST_TEST_OPS test_listen_and_serv_op)
 list(APPEND DIST_TEST_OPS test_fleet_graph_execution_meta_optimizer)
+list(APPEND DIST_TEST_OPS test_gen_nccl_id_op)
+list(APPEND DIST_TEST_OPS test_parallel_dygraph_unused_variables)
 set(MIXED_DIST_TEST_OPS ${DIST_TEST_OPS})
 #remove distribute unittests.
 list(APPEND MIXED_DIST_TEST_OPS test_dgc_op)
@@ -73,12 +74,17 @@ if(NOT WITH_GPU OR WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_collective_sendrecv)
     LIST(REMOVE_ITEM TEST_OPS test_reducescatter)
     LIST(REMOVE_ITEM TEST_OPS test_reducescatter_api)
+    LIST(REMOVE_ITEM TEST_OPS test_collective_split_embedding)
+    LIST(REMOVE_ITEM TEST_OPS test_collective_split_embedding_none_divisible)
+    LIST(REMOVE_ITEM TEST_OPS test_collective_split_row_linear)
+    LIST(REMOVE_ITEM TEST_OPS test_collective_split_col_linear)
     LIST(REMOVE_ITEM TEST_OPS test_collective_reduce_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_scatter_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_barrier_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_allreduce_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_broadcast_api)
     LIST(REMOVE_ITEM TEST_OPS test_collective_allgather_api)
+    LIST(REMOVE_ITEM TEST_OPS test_memcpy_op)
 endif()
 
 if(WIN32)
@@ -109,19 +115,14 @@ if(NOT WITH_DISTRIBUTE OR WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_fleet_ps)
     LIST(REMOVE_ITEM TEST_OPS test_fleet_rolemaker_2)
     LIST(REMOVE_ITEM TEST_OPS test_fleet_utils)
-    LIST(REMOVE_ITEM TEST_OPS test_lookup_sparse_table_split_op)
 
     # TODO: Fix these unittests failed on Windows
     list(REMOVE_ITEM TEST_OPS test_fake_init_op)
-    list(REMOVE_ITEM TEST_OPS test_merge_ids_op)
-    list(REMOVE_ITEM TEST_OPS test_split_ids_op)
-    LIST(REMOVE_ITEM TEST_OPS test_ref_by_trainer_id_op)
 endif()
 
 if(NOT WITH_DISTRIBUTE)
     LIST(REMOVE_ITEM TEST_OPS test_fleet_rolemaker_new)
     LIST(REMOVE_ITEM TEST_OPS test_desc_clone_dist)
-    LIST(REMOVE_ITEM TEST_OPS test_program_code_dist)
 endif()
 
 if(WITH_MUSL)
@@ -145,6 +146,7 @@ LIST(REMOVE_ITEM TEST_OPS test_hdfs1)
 LIST(REMOVE_ITEM TEST_OPS test_hdfs2)
 LIST(REMOVE_ITEM TEST_OPS test_hdfs3)
 LIST(REMOVE_ITEM TEST_OPS test_checkpoint_saver)
+
 if(APPLE OR WIN32)
     LIST(REMOVE_ITEM TEST_OPS test_fs_interface)
     LIST(REMOVE_ITEM TEST_OPS test_fleet_metric)
@@ -155,6 +157,7 @@ if (NOT ${WITH_GPU})
     LIST(REMOVE_ITEM TEST_OPS test_rank_attention_op) # TODO(shenliang03): rank_attention_op support CPU device in future
     LIST(REMOVE_ITEM TEST_OPS test_batch_fc_op) # TODO(shenliang03): batch_fc_op support CPU device in future
     LIST(REMOVE_ITEM TEST_OPS test_parallel_dygraph_mnist) # TODO(Yancey1989): parallel dygraph support CPU device in future
+    list(REMOVE_ITEM TEST_OPS test_parallel_dygraph_unused_variables)
     list(REMOVE_ITEM TEST_OPS test_parallel_dygraph_se_resnext)
     LIST(REMOVE_ITEM TEST_OPS test_parallel_dygraph_sparse_embedding)
     LIST(REMOVE_ITEM TEST_OPS test_parallel_dygraph_sparse_embedding_over_height)
@@ -214,9 +217,7 @@ if(WITH_COVERAGE OR WIN32 OR WITH_NV_JETSON)
   list(REMOVE_ITEM TEST_OPS test_pyramid_hash_op)
 endif()
 
-if(NOT WITH_DISTRIBUTE OR WITH_COVERAGE OR WIN32 OR WITH_NV_JETSON)
-  list(REMOVE_ITEM TEST_OPS test_fleet_pyramid_hash)
-endif()
+list(REMOVE_ITEM TEST_OPS test_fleet_pyramid_hash)
 
 if(WITH_GPU OR NOT WITH_MKLML)
     # matmul with multiple heads need MKL support
@@ -660,12 +661,14 @@ endif()
 
 if (WITH_DISTRIBUTE)
     set_tests_properties(test_communicator_half_async PROPERTIES TIMEOUT 120)
+    set_tests_properties(test_dist_fleet_infer PROPERTIES TIMEOUT 200)
 endif()
 
 if (WITH_DISTRIBUTE AND NOT APPLE)
     if(WITH_GPU)
         set_tests_properties(test_c_comm_init_op PROPERTIES TIMEOUT 120)
         set_tests_properties(test_fleet_checkpoint PROPERTIES TIMEOUT 120)
+        set_tests_properties(test_dist_mnist_gradient_merge PROPERTIES TIMEOUT 120)
     endif()
 endif()
 
@@ -704,6 +707,13 @@ set_tests_properties(test_trilinear_interp_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_bicubic_interp_v2_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_gather_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_static_save_load PROPERTIES TIMEOUT 120)
+if (WIN32)
+    set_tests_properties(test_static_save_load_large PROPERTIES TIMEOUT 900)
+    set_tests_properties(test_paddle_save_load PROPERTIES TIMEOUT 250)
+else()
+    set_tests_properties(test_static_save_load_large PROPERTIES TIMEOUT 600)
+    set_tests_properties(test_paddle_save_load PROPERTIES TIMEOUT 150)
+endif()
 set_tests_properties(test_imperative_selected_rows_to_lod_tensor PROPERTIES TIMEOUT 120)
 set_tests_properties(test_index_select_op PROPERTIES TIMEOUT 120)
 set_tests_properties(test_parallel_ssa_graph_inference_feed_partial_data PROPERTIES TIMEOUT 120)
@@ -810,6 +820,7 @@ if(WITH_DISTRIBUTE AND WITH_GPU AND WITH_NCCL)
     if(${NCCL_VERSION} VERSION_GREATER_EQUAL 2212)
         set_tests_properties(test_parallel_dygraph_sparse_embedding PROPERTIES TIMEOUT 120)
         set_tests_properties(test_parallel_dygraph_transformer PROPERTIES TIMEOUT 120)
+        set_tests_properties(test_parallel_dygraph_unused_variables PROPERTIES TIMEOUT 120)
     endif()
 endif()
 if(WITH_GPU AND NOT WIN32)
@@ -830,6 +841,17 @@ if(WITH_GPU AND NOT WIN32)
     set_tests_properties(test_collective_barrier_api PROPERTIES TIMEOUT 120)
     set_tests_properties(test_collective_scatter PROPERTIES TIMEOUT 120)
     set_tests_properties(test_collective_sendrecv PROPERTIES TIMEOUT 120)
+    set_tests_properties(test_collective_split_embedding
+        test_collective_split_embedding_none_divisible
+        test_collective_split_row_linear
+        test_collective_split_col_linear
+        test_collective_scatter_api
+        test_collective_barrier_api
+        test_collective_reduce_api
+        test_collective_allreduce_api
+        test_collective_broadcast_api
+        test_collective_allgather_api
+        PROPERTIES LABELS "RUN_TYPE=DIST")
 endif()
 if(WITH_GPU)
     set_tests_properties(test_imperative_auto_mixed_precision PROPERTIES TIMEOUT 120)

@@ -32,6 +32,7 @@ if (WITH_PYTHON)
 endif()
 
 cc_library(flags SRCS flags.cc DEPS gflags)
+cc_library(denormal SRCS denormal.cc DEPS)
 
 cc_library(errors SRCS errors.cc DEPS error_codes_proto)
 cc_test(errors_test SRCS errors_test.cc DEPS errors enforce)
@@ -57,7 +58,7 @@ cc_library(place SRCS place.cc DEPS enforce boost)
 cc_test(place_test SRCS place_test.cc DEPS place glog gflags)
 
 if(WITH_XPU)
-cc_library(xpu_info SRCS xpu_info.cc DEPS gflags glog enforce)
+cc_library(xpu_info SRCS xpu_info.cc DEPS gflags glog enforce xpulib)
 endif()
 
 add_subdirectory(dynload)

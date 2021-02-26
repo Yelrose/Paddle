@@ -23,3 +23,12 @@ string(REPLACE ".py" "" TEST_OPS "${TEST_OPS}")
 foreach(src ${TEST_OPS})
     py_test(${src} SRCS ${src}.py)
 endforeach()
+
+# Compiling .so will cost some time, but running process is very fast.
+set_tests_properties(test_jit_load PROPERTIES TIMEOUT 180)
+set_tests_properties(test_setup_install PROPERTIES TIMEOUT 180)
+set_tests_properties(test_setup_build PROPERTIES TIMEOUT 180)
+set_tests_properties(test_dispatch PROPERTIES TIMEOUT 180)
+
+set_tests_properties(test_simple_custom_op_setup PROPERTIES TIMEOUT 250)
+set_tests_properties(test_simple_custom_op_jit PROPERTIES TIMEOUT 180)

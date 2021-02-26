@@ -20,10 +20,13 @@ add_subdirectory(reduce_ops)
 add_subdirectory(sequence_ops)
 add_subdirectory(jit)
 
+
 if(WITH_DISTRIBUTE)
-    add_subdirectory(distributed)
-    add_subdirectory(distributed_ops)
     add_subdirectory(collective)
+endif()
+
+if (WITH_PSCORE)
+    add_subdirectory(pscore)
 endif()
 
 add_subdirectory(amp)
@@ -50,10 +53,6 @@ if (WITH_GPU)
     endif()
 endif()
 
-SET(OP_PREFETCH_DEPS "")
-if (WITH_DISTRIBUTE)
-    SET(OP_PREFETCH_DEPS ${OP_PREFETCH_DEPS} parameter_prefetch)
-endif()
 
 SET(OP_MKL_DEPS "")
 if (NOT WITH_MKL OR NOT WITH_AVX)
@@ -65,7 +64,7 @@ if(WITH_COVERAGE OR WIN32 OR WITH_NV_JETSON)
 endif()
 
 register_operators(EXCLUDES py_func_op warpctc_op dgc_op lstm_op
-    sync_batch_norm_op ${OP_MKL_DEPS} DEPS ${OP_HEADER_DEPS} ${OP_PREFETCH_DEPS})
+    sync_batch_norm_op ${OP_MKL_DEPS} DEPS ${OP_HEADER_DEPS})
 
 if (WITH_GPU)
     # warpctc_op needs cudnn 7 above
@@ -79,7 +78,8 @@ if (WITH_GPU)
 else()
     op_library(warpctc_op DEPS dynload_warpctc sequence_padding sequence_scale)
 endif()
-op_library(lstm_op DEPS ${OP_HEADER_DEPS} ${OP_PREFETCH_DEPS} lstm_compute)
+
+op_library(lstm_op DEPS ${OP_HEADER_DEPS} lstm_compute)
 
 set(COMMON_OP_DEPS ${OP_HEADER_DEPS})
 
@@ -106,6 +106,9 @@ set(COMMON_OP_DEPS ${COMMON_OP_DEPS} device_memory_aligment)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} layer)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} tensor_formatter)
 set(COMMON_OP_DEPS ${COMMON_OP_DEPS} op_version_registry)
+if (WITH_ASCEND)
+  set(COMMON_OP_DEPS ${COMMON_OP_DEPS} ascend_wrapper)
+endif()
 
 # FIXME(typhoonzero): operator deps may not needed.
 # op_library(lod_tensor_to_array_op DEPS lod_rank_table_op)

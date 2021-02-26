@@ -31,6 +31,11 @@ elseif(SSE3_FOUND)
     set(SIMD_FLAG ${SSE3_FLAG})
 endif()
 
+if (SSE3_FOUND)
+    # TODO: Runtime detection should be used here.
+    add_definitions(-DPADDLE_WITH_SSE3)
+endif()
+
 if(WIN32)
   # windows header option for all targets.
   add_definitions(-D_XKEYCHECK_H)
@@ -71,6 +76,10 @@ endif()
 
 if(WITH_BOX_PS)
     add_definitions(-DPADDLE_WITH_BOX_PS)
+endif()
+
+if(WITH_ASCEND)
+    add_definitions(-DPADDLE_WITH_ASCEND)
 endif()
 
 if(WITH_XPU)
@@ -150,6 +159,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SIMD_FLAG}")
 if(WITH_DISTRIBUTE)
   add_definitions(-DPADDLE_WITH_DISTRIBUTE)
 endif()
+
+if(WITH_PSCORE)
+    add_definitions(-DPADDLE_WITH_PSCORE)
+endif()
+
 
 if(WITH_GRPC)
     add_definitions(-DPADDLE_WITH_GRPC)
