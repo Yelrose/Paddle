@@ -23,21 +23,22 @@ limitations under the License. */
 #include "google/protobuf/text_format.h"
 
 #include "gtest/gtest.h"
-#include "paddle/fluid/framework/lod_tensor.h"
-#include "paddle/fluid/framework/scope.h"
-#include "paddle/fluid/framework/tensor_util.h"
-#include "paddle/fluid/framework/variable.h"
-
 #include "paddle/fluid/distributed/ps.pb.h"
 #include "paddle/fluid/distributed/service/brpc_ps_client.h"
 #include "paddle/fluid/distributed/service/brpc_ps_server.h"
 #include "paddle/fluid/distributed/service/env.h"
+#include "paddle/fluid/distributed/service/graph_brpc_client.h"
+#include "paddle/fluid/distributed/service/graph_brpc_server.h"
 #include "paddle/fluid/distributed/service/graph_py_service.h"
 #include "paddle/fluid/distributed/service/ps_client.h"
 #include "paddle/fluid/distributed/service/sendrecv.pb.h"
 #include "paddle/fluid/distributed/service/service.h"
 #include "paddle/fluid/distributed/table/graph_node.h"
+#include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/framework/program_desc.h"
+#include "paddle/fluid/framework/scope.h"
+#include "paddle/fluid/framework/tensor_util.h"
+#include "paddle/fluid/framework/variable.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/place.h"
 #include "paddle/fluid/string/printf.h"
@@ -50,7 +51,7 @@ namespace memory = paddle::memory;
 namespace distributed = paddle::distributed;
 
 void testSampleNodes(
-    std::shared_ptr<paddle::distributed::PSClient>& worker_ptr_) {
+    std::shared_ptr<paddle::distributed::GraphBrpcClient>& worker_ptr_) {
   std::vector<uint64_t> ids;
   auto pull_status = worker_ptr_->random_sample_nodes(0, 0, 6, ids);
   std::unordered_set<uint64_t> s;
@@ -64,48 +65,51 @@ void testSampleNodes(
 }
 
 void testFeatureNodeSerializeInt() {
-  std::string out = distributed::FeatureNode::parse_value_to_bytes<int32_t>({"123", "345"});
-  std::vector<int32_t > out2 = distributed::FeatureNode::parse_bytes_to_array<int32_t>(out);
-  ASSERT_EQ(out2[0] , 123);
-  ASSERT_EQ(out2[1] , 345);
+  std::string out =
+      distributed::FeatureNode::parse_value_to_bytes<int32_t>({"123", "345"});
+  std::vector<int32_t> out2 =
+      distributed::FeatureNode::parse_bytes_to_array<int32_t>(out);
+  ASSERT_EQ(out2[0], 123);
+  ASSERT_EQ(out2[1], 345);
 }
 
 void testFeatureNodeSerializeInt64() {
-  std::string out = distributed::FeatureNode::parse_value_to_bytes<int64_t>({"123", "345"});
-  std::vector<int64_t > out2 = distributed::FeatureNode::parse_bytes_to_array<int64_t>(out);
-  ASSERT_EQ(out2[0] , 123);
-  ASSERT_EQ(out2[1] , 345);
+  std::string out =
+      distributed::FeatureNode::parse_value_to_bytes<int64_t>({"123", "345"});
+  std::vector<int64_t> out2 =
+      distributed::FeatureNode::parse_bytes_to_array<int64_t>(out);
+  ASSERT_EQ(out2[0], 123);
+  ASSERT_EQ(out2[1], 345);
 }
-
 
 void testFeatureNodeSerializeFloat32() {
-  std::string out = distributed::FeatureNode::parse_value_to_bytes<float>({"123.123", "345.123"});
-  std::vector<float> out2 = distributed::FeatureNode::parse_bytes_to_array<float>(out);
-  float eps; 
+  std::string out = distributed::FeatureNode::parse_value_to_bytes<float>(
+      {"123.123", "345.123"});
+  std::vector<float> out2 =
+      distributed::FeatureNode::parse_bytes_to_array<float>(out);
+  float eps;
   std::cout << "Float " << out2[0] << " " << 123.123 << std::endl;
   eps = out2[0] - 123.123;
-  ASSERT_LE(eps * eps , 1e-5);
+  ASSERT_LE(eps * eps, 1e-5);
   eps = out2[1] - 345.123;
-  ASSERT_LE(eps * eps , 1e-5);
+  ASSERT_LE(eps * eps, 1e-5);
 }
-
 
 void testFeatureNodeSerializeFloat64() {
-  std::string out = distributed::FeatureNode::parse_value_to_bytes<double>({"123.123", "345.123"});
-  std::vector<double> out2 = distributed::FeatureNode::parse_bytes_to_array<double>(out);
-  float eps; 
+  std::string out = distributed::FeatureNode::parse_value_to_bytes<double>(
+      {"123.123", "345.123"});
+  std::vector<double> out2 =
+      distributed::FeatureNode::parse_bytes_to_array<double>(out);
+  float eps;
   eps = out2[0] - 123.123;
   std::cout << "Float64 " << out2[0] << " " << 123.123 << std::endl;
-  ASSERT_LE(eps * eps , 1e-5);
+  ASSERT_LE(eps * eps, 1e-5);
   eps = out2[1] - 345.123;
-  ASSERT_LE(eps * eps , 1e-5);
+  ASSERT_LE(eps * eps, 1e-5);
 }
 
-
-
-
 void testSingleSampleNeighboor(
-    std::shared_ptr<paddle::distributed::PSClient>& worker_ptr_) {
+    std::shared_ptr<paddle::distributed::GraphBrpcClient>& worker_ptr_) {
   std::vector<std::vector<std::pair<uint64_t, float>>> vs;
   auto pull_status = worker_ptr_->batch_sample_neighboors(
       0, std::vector<uint64_t>(1, 37), 4, vs);
@@ -120,6 +124,7 @@ void testSingleSampleNeighboor(
   for (auto g : s) {
     ASSERT_EQ(true, s1.find(g) != s1.end());
   }
+  VLOG(0) << "test single done";
   s.clear();
   s1.clear();
   vs.clear();
@@ -137,7 +142,7 @@ void testSingleSampleNeighboor(
 }
 
 void testBatchSampleNeighboor(
-    std::shared_ptr<paddle::distributed::PSClient>& worker_ptr_) {
+    std::shared_ptr<paddle::distributed::GraphBrpcClient>& worker_ptr_) {
   std::vector<std::vector<std::pair<uint64_t, float>>> vs;
   std::vector<std::uint64_t> v = {37, 96};
   auto pull_status = worker_ptr_->batch_sample_neighboors(0, v, 4, vs);
@@ -179,14 +184,22 @@ std::string edges[] = {
 char edge_file_name[] = "edges.txt";
 
 std::string nodes[] = {
-    std::string("user\t37\ta 0.34\tb 13 14\tc hello"),  std::string("user\t96\ta 0.31\tb 15 10"),
-    std::string("user\t59\ta 0.11\tb 11 14"),  std::string("user\t97\ta 0.11\tb 12 11"),
-    std::string("item\t45\ta 0.21"),  std::string("item\t145\ta 0.21"),
-    std::string("item\t112\ta 0.21"), std::string("item\t48\ta 0.21"),
-    std::string("item\t247\ta 0.21"), std::string("item\t111\ta 0.21"),
-    std::string("item\t46\ta 0.21"),  std::string("item\t146\ta 0.21"),
-    std::string("item\t122\ta 0.21"), std::string("item\t49\ta 0.21"),
-    std::string("item\t248\ta 0.21"), std::string("item\t113\ta 0.21")};
+                       std::string("user\t37\ta 0.34\tb 13 14\tc hello\td abc"),
+                       std::string("user\t96\ta 0.31\tb 15 10\tc 96hello\td abcd"),
+                       std::string("user\t59\ta 0.11\tb 11 14"),
+                       std::string("user\t97\ta 0.11\tb 12 11"),
+                       std::string("item\t45\ta 0.21"),
+                       std::string("item\t145\ta 0.21"),
+                       std::string("item\t112\ta 0.21"),
+                       std::string("item\t48\ta 0.21"),
+                       std::string("item\t247\ta 0.21"),
+                       std::string("item\t111\ta 0.21"),
+                       std::string("item\t46\ta 0.21"),
+                       std::string("item\t146\ta 0.21"),
+                       std::string("item\t122\ta 0.21"),
+                       std::string("item\t49\ta 0.21"),
+                       std::string("item\t248\ta 0.21"),
+                       std::string("item\t113\ta 0.21")};
 char node_file_name[] = "nodes.txt";
 
 void prepare_file(char file_name[], bool load_edge) {
@@ -280,9 +293,10 @@ uint32_t port_ = 4209, port2 = 4210;
 
 std::vector<std::string> host_sign_list_;
 
-std::shared_ptr<paddle::distributed::PSServer> pserver_ptr_, pserver_ptr2;
+std::shared_ptr<paddle::distributed::GraphBrpcServer> pserver_ptr_,
+    pserver_ptr2;
 
-std::shared_ptr<paddle::distributed::PSClient> worker_ptr_;
+std::shared_ptr<paddle::distributed::GraphBrpcClient> worker_ptr_;
 
 void RunServer() {
   LOG(INFO) << "init first server";
@@ -290,8 +304,9 @@ void RunServer() {
 
   auto _ps_env = paddle::distributed::PaddlePSEnvironment();
   _ps_env.set_ps_servers(&host_sign_list_, 2);  // test
-  pserver_ptr_ = std::shared_ptr<paddle::distributed::PSServer>(
-      paddle::distributed::PSServerFactory::create(server_proto));
+  pserver_ptr_ = std::shared_ptr<paddle::distributed::GraphBrpcServer>(
+      (paddle::distributed::GraphBrpcServer*)
+          paddle::distributed::PSServerFactory::create(server_proto));
   std::vector<framework::ProgramDesc> empty_vec;
   framework::ProgramDesc empty_prog;
   empty_vec.push_back(empty_prog);
@@ -307,8 +322,9 @@ void RunServer2() {
 
   auto _ps_env2 = paddle::distributed::PaddlePSEnvironment();
   _ps_env2.set_ps_servers(&host_sign_list_, 2);  // test
-  pserver_ptr2 = std::shared_ptr<paddle::distributed::PSServer>(
-      paddle::distributed::PSServerFactory::create(server_proto2));
+  pserver_ptr2 = std::shared_ptr<paddle::distributed::GraphBrpcServer>(
+      (paddle::distributed::GraphBrpcServer*)
+          paddle::distributed::PSServerFactory::create(server_proto2));
   std::vector<framework::ProgramDesc> empty_vec2;
   framework::ProgramDesc empty_prog2;
   empty_vec2.push_back(empty_prog2);
@@ -316,16 +332,21 @@ void RunServer2() {
   pserver_ptr2->start(ip2, port2);
 }
 
-void RunClient(std::map<uint64_t, std::vector<paddle::distributed::Region>>&
-                   dense_regions) {
+void RunClient(
+    std::map<uint64_t, std::vector<paddle::distributed::Region>>& dense_regions,
+    int index, paddle::distributed::PsBaseService* service) {
   ::paddle::distributed::PSParameter worker_proto = GetWorkerProto();
   paddle::distributed::PaddlePSEnvironment _ps_env;
   auto servers_ = host_sign_list_.size();
   _ps_env = paddle::distributed::PaddlePSEnvironment();
   _ps_env.set_ps_servers(&host_sign_list_, servers_);
-  worker_ptr_ = std::shared_ptr<paddle::distributed::PSClient>(
-      paddle::distributed::PSClientFactory::create(worker_proto));
+  worker_ptr_ = std::shared_ptr<paddle::distributed::GraphBrpcClient>(
+      (paddle::distributed::GraphBrpcClient*)
+          paddle::distributed::PSClientFactory::create(worker_proto));
   worker_ptr_->configure(worker_proto, dense_regions, _ps_env, 0);
+  worker_ptr_->set_local_channel(index);
+  worker_ptr_->set_local_graph_service(
+      (paddle::distributed::GraphBrpcService*)service);
 }
 
 void RunBrpcPushSparse() {
@@ -350,7 +371,7 @@ void RunBrpcPushSparse() {
       std::pair<uint64_t, std::vector<paddle::distributed::Region>>(0, {}));
   auto regions = dense_regions[0];
 
-  RunClient(dense_regions);
+  RunClient(dense_regions, 0, pserver_ptr_->get_service());
 
   /*-----------------------Test Server Init----------------------------------*/
   auto pull_status =
@@ -369,6 +390,7 @@ void RunBrpcPushSparse() {
   // std::vector<std::pair<uint64_t, float>> v;
   // pull_status = worker_ptr_->sample(0, 37, 4, v);
   testSampleNodes(worker_ptr_);
+  sleep(5);
   testSingleSampleNeighboor(worker_ptr_);
   testBatchSampleNeighboor(worker_ptr_);
   pull_status = worker_ptr_->batch_sample_neighboors(
@@ -395,17 +417,20 @@ void RunBrpcPushSparse() {
   std::vector<std::string> edge_types = {std::string("user2item")};
   std::vector<std::string> node_types = {std::string("user"),
                                          std::string("item")};
+  VLOG(0) << "make 2 servers";
   server1.set_up(ips_str, 127, node_types, edge_types, 0);
   server2.set_up(ips_str, 127, node_types, edge_types, 1);
 
   server1.add_table_feat_conf("user", "a", "float32", 1);
   server1.add_table_feat_conf("user", "b", "int32", 2);
   server1.add_table_feat_conf("user", "c", "string", 1);
+  server1.add_table_feat_conf("user", "d", "string", 1);
   server1.add_table_feat_conf("item", "a", "float32", 1);
 
   server2.add_table_feat_conf("user", "a", "float32", 1);
   server2.add_table_feat_conf("user", "b", "int32", 2);
   server2.add_table_feat_conf("user", "c", "string", 1);
+  server2.add_table_feat_conf("user", "d", "string", 1);
   server2.add_table_feat_conf("item", "a", "float32", 1);
 
   client1.set_up(ips_str, 127, node_types, edge_types, 0);
@@ -413,6 +438,7 @@ void RunBrpcPushSparse() {
   client1.add_table_feat_conf("user", "a", "float32", 1);
   client1.add_table_feat_conf("user", "b", "int32", 2);
   client1.add_table_feat_conf("user", "c", "string", 1);
+  client1.add_table_feat_conf("user", "d", "string", 1);
   client1.add_table_feat_conf("item", "a", "float32", 1);
 
   client2.set_up(ips_str, 127, node_types, edge_types, 1);
@@ -420,6 +446,7 @@ void RunBrpcPushSparse() {
   client2.add_table_feat_conf("user", "a", "float32", 1);
   client2.add_table_feat_conf("user", "b", "int32", 2);
   client2.add_table_feat_conf("user", "c", "string", 1);
+  client2.add_table_feat_conf("user", "d", "string", 1);
   client2.add_table_feat_conf("item", "a", "float32", 1);
 
   server1.start_server();
@@ -431,6 +458,11 @@ void RunBrpcPushSparse() {
   client2.start_client();
   std::cout << "first client done" << std::endl;
   std::cout << "started" << std::endl;
+  VLOG(0) << "come to set local server";
+  client1.bind_local_server(0, server1);
+  VLOG(0) << "first bound";
+  client2.bind_local_server(1, server2);
+  VLOG(0) << "second bound";
   client1.load_node_file(std::string("user"), std::string(node_file_name));
   client1.load_node_file(std::string("item"), std::string(node_file_name));
   client1.load_edge_file(std::string("user2item"), std::string(edge_file_name),
@@ -441,24 +473,21 @@ void RunBrpcPushSparse() {
 
   nodes = client1.pull_graph_list(std::string("user"), 0, 1, 4, 1);
 
-  for (auto g : nodes) {
-    std::cout << "node_ids: " << g.get_id() << std::endl;
-  }
-  std::cout << "node_ids: " << nodes[0].get_id() << std::endl;
   ASSERT_EQ(nodes[0].get_id(), 59);
   nodes.clear();
 
-  // Test Pull by step
-  
 
-  std::unordered_set<uint64_t>  count_item_nodes; 
+  // Test Pull by step
+
+  std::unordered_set<uint64_t> count_item_nodes;
   // pull by step 2
-  for(int test_step=1; test_step < 4 ; test_step ++) {
+  for (int test_step = 1; test_step < 4; test_step++) {
     count_item_nodes.clear();
     std::cout << "check pull graph list by step " << test_step << std::endl;
-    for(int server_id = 0; server_id < 2; server_id ++) {
-      for(int start_step = 0; start_step < test_step; start_step ++) {
-        nodes = client1.pull_graph_list(std::string("item"), server_id, start_step, 12, test_step);
+    for (int server_id = 0; server_id < 2; server_id++) {
+      for (int start_step = 0; start_step < test_step; start_step++) {
+        nodes = client1.pull_graph_list(std::string("item"), server_id,
+                                        start_step, 12, test_step);
         for (auto g : nodes) {
           count_item_nodes.insert(g.get_id());
         }
@@ -471,10 +500,6 @@ void RunBrpcPushSparse() {
   vs = client1.batch_sample_neighboors(std::string("user2item"),
                                        std::vector<uint64_t>(1, 96), 4);
   ASSERT_EQ(vs[0].size(), 3);
-  std::cout << "batch sample result" << std::endl;
-  for (auto p : vs[0]) {
-    std::cout << p.first << " " << p.second << std::endl;
-  }
   std::vector<uint64_t> node_ids;
   node_ids.push_back(96);
   node_ids.push_back(37);
@@ -485,22 +510,21 @@ void RunBrpcPushSparse() {
   ASSERT_EQ(nodes_ids.size(), 2);
   ASSERT_EQ(true, (nodes_ids[0] == 59 && nodes_ids[1] == 37) ||
                       (nodes_ids[0] == 37 && nodes_ids[1] == 59));
-  // to test in python,try this:
-  //   from paddle.fluid.core import GraphPyService
-  // ips_str = "127.0.0.1:4211;127.0.0.1:4212"
-  // gps1 = GraphPyService();
-  // gps2 = GraphPyService();
-  // gps1.set_up(ips_str, 127, 0, 0, 0);
-  // gps2.set_up(ips_str, 127, 1, 1, 0);
-  // gps1.load_file("input.txt");
 
-  // list = gps2.pull_graph_list(0,1,4)
-  // for x in list:
-  //     print(x.get_id())
-
-  // list = gps2.sample_k(96, "user", 4);
-  // for x in list:
-  //     print(x.get_id())
+  // Test get node feat
+  node_ids.clear();
+  node_ids.push_back(37);
+  node_ids.push_back(96);
+  std::vector<std::string> feature_names;
+  feature_names.push_back(std::string("c"));
+  feature_names.push_back(std::string("d"));
+  auto node_feat = client1.get_node_feat(std::string("user"), node_ids, feature_names);
+  ASSERT_EQ(node_feat.size(), 2);
+  ASSERT_EQ(node_feat[0].size(), 2);
+  std::cout << "get_node_feat: " << node_feat[0][0] << std::endl;
+  std::cout << "get_node_feat: " << node_feat[0][1] << std::endl;
+  std::cout << "get_node_feat: " << node_feat[1][0] << std::endl;
+  std::cout << "get_node_feat: " << node_feat[1][1] << std::endl;
 
   std::remove(edge_file_name);
   std::remove(node_file_name);
@@ -519,7 +543,9 @@ void RunBrpcPushSparse() {
 
 void testGraphToBuffer() {
   ::paddle::distributed::GraphNode s, s1;
-  s.add_feature("hhhh");
+  //s.add_feature("hhhh");
+  s.set_feature_size(1);
+  s.set_feature(0, std::string("hhhh"));
   s.set_id(65);
   int size = s.get_size(true);
   char str[size];

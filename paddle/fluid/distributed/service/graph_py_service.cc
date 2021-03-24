@@ -32,19 +32,17 @@ std::vector<std::string> GraphPyService::split(std::string& str,
   return res;
 }
 
-
 void GraphPyService::add_table_feat_conf(std::string table_name,
-                                        std::string feat_name,
-                                        std::string feat_dtype,
-                                        int32_t feat_shape) {
-  if(this->table_id_map.count(table_name)) {
+                                         std::string feat_name,
+                                         std::string feat_dtype,
+                                         int32_t feat_shape) {
+  if (this->table_id_map.count(table_name)) {
     this->table_feat_conf_table_name.push_back(table_name);
     this->table_feat_conf_feat_name.push_back(feat_name);
     this->table_feat_conf_feat_dtype.push_back(feat_dtype);
     this->table_feat_conf_feat_shape.push_back(feat_shape);
   }
 }
-
 
 void GraphPyService::set_up(std::string ips_str, int shard_num,
                             std::vector<std::string> node_types,
@@ -88,8 +86,9 @@ void GraphPyClient::start_client() {
   auto servers_ = host_sign_list.size();
   _ps_env = paddle::distributed::PaddlePSEnvironment();
   _ps_env.set_ps_servers(&host_sign_list, servers_);
-  worker_ptr = std::shared_ptr<paddle::distributed::PSClient>(
-      paddle::distributed::PSClientFactory::create(worker_proto));
+  worker_ptr = std::shared_ptr<paddle::distributed::GraphBrpcClient>(
+      (paddle::distributed::GraphBrpcClient*)
+          paddle::distributed::PSClientFactory::create(worker_proto));
   worker_ptr->configure(worker_proto, dense_regions, _ps_env, client_id);
 }
 void GraphPyServer::start_server() {
@@ -102,8 +101,9 @@ void GraphPyServer::start_server() {
       auto _ps_env = paddle::distributed::PaddlePSEnvironment();
       _ps_env.set_ps_servers(&this->host_sign_list,
                              this->host_sign_list.size());  // test
-      pserver_ptr = std::shared_ptr<paddle::distributed::PSServer>(
-          paddle::distributed::PSServerFactory::create(server_proto));
+      pserver_ptr = std::shared_ptr<paddle::distributed::GraphBrpcServer>(
+          (paddle::distributed::GraphBrpcServer*)
+              paddle::distributed::PSServerFactory::create(server_proto));
       VLOG(0) << "pserver-ptr created ";
       std::vector<framework::ProgramDesc> empty_vec;
       framework::ProgramDesc empty_prog;
@@ -136,31 +136,25 @@ void GraphPyServer::start_server() {
     VLOG(0) << " make a new table " << tuple.second;
     ::paddle::distributed::TableParameter* sparse_table_proto =
         downpour_server_proto->add_downpour_table_param();
-    std::vector<std::string > feat_name;
-    std::vector<std::string > feat_dtype;
+    std::vector<std::string> feat_name;
+    std::vector<std::string> feat_dtype;
     std::vector<int32_t> feat_shape;
-    for(size_t i=0; i<this->table_feat_conf_table_name.size(); i++) {
-      if(tuple.first == table_feat_conf_table_name[i]) {
+    for (size_t i = 0; i < this->table_feat_conf_table_name.size(); i++) {
+      if (tuple.first == table_feat_conf_table_name[i]) {
         feat_name.push_back(table_feat_conf_feat_name[i]);
         feat_dtype.push_back(table_feat_conf_feat_dtype[i]);
         feat_shape.push_back(table_feat_conf_feat_shape[i]);
       }
     }
     std::string table_type;
-    if(tuple.second < this->num_node_types) {
+    if (tuple.second < this->num_node_types) {
       table_type = "node";
-    }
-    else {
+    } else {
       table_type = "edge";
     }
 
-    GetDownpourSparseTableProto(sparse_table_proto,
-                                tuple.second,
-                                tuple.first,
-                                table_type,
-                                feat_name,
-                                feat_dtype,
-                                feat_shape);
+    GetDownpourSparseTableProto(sparse_table_proto, tuple.second, tuple.first,
+                                table_type, feat_name, feat_dtype, feat_shape);
   }
 
   return server_fleet_desc;
@@ -179,34 +173,27 @@ void GraphPyServer::start_server() {
     VLOG(0) << " make a new table " << tuple.second;
     ::paddle::distributed::TableParameter* worker_sparse_table_proto =
         downpour_worker_proto->add_downpour_table_param();
-    std::vector<std::string > feat_name;
-    std::vector<std::string > feat_dtype;
+    std::vector<std::string> feat_name;
+    std::vector<std::string> feat_dtype;
     std::vector<int32_t> feat_shape;
-    for(size_t i=0; i<this->table_feat_conf_table_name.size(); i++) {
-      if(tuple.first == table_feat_conf_table_name[i]) {
+    for (size_t i = 0; i < this->table_feat_conf_table_name.size(); i++) {
+      if (tuple.first == table_feat_conf_table_name[i]) {
         feat_name.push_back(table_feat_conf_feat_name[i]);
         feat_dtype.push_back(table_feat_conf_feat_dtype[i]);
         feat_shape.push_back(table_feat_conf_feat_shape[i]);
       }
     }
     std::string table_type;
-    if(tuple.second < this->num_node_types) {
+    if (tuple.second < this->num_node_types) {
       table_type = "node";
-    }
-    else {
+    } else {
       table_type = "edge";
     }
 
-    GetDownpourSparseTableProto(worker_sparse_table_proto,
-                                tuple.second,
-                                tuple.first,
-                                table_type,
-                                feat_name,
-                                feat_dtype,
+    GetDownpourSparseTableProto(worker_sparse_table_proto, tuple.second,
+                                tuple.first, table_type, feat_name, feat_dtype,
                                 feat_shape);
   }
-
-
 
   ::paddle::distributed::ServerParameter* server_proto =
       worker_fleet_desc.mutable_server_param();
@@ -224,34 +211,26 @@ void GraphPyServer::start_server() {
     VLOG(0) << " make a new table " << tuple.second;
     ::paddle::distributed::TableParameter* sparse_table_proto =
         downpour_server_proto->add_downpour_table_param();
-    std::vector<std::string > feat_name;
-    std::vector<std::string > feat_dtype;
+    std::vector<std::string> feat_name;
+    std::vector<std::string> feat_dtype;
     std::vector<int32_t> feat_shape;
-    for(size_t i=0; i<this->table_feat_conf_table_name.size(); i++) {
-      if(tuple.first == table_feat_conf_table_name[i]) {
+    for (size_t i = 0; i < this->table_feat_conf_table_name.size(); i++) {
+      if (tuple.first == table_feat_conf_table_name[i]) {
         feat_name.push_back(table_feat_conf_feat_name[i]);
         feat_dtype.push_back(table_feat_conf_feat_dtype[i]);
         feat_shape.push_back(table_feat_conf_feat_shape[i]);
       }
     }
     std::string table_type;
-    if(tuple.second < this->num_node_types) {
+    if (tuple.second < this->num_node_types) {
       table_type = "node";
-    }
-    else {
+    } else {
       table_type = "edge";
     }
 
-    GetDownpourSparseTableProto(sparse_table_proto,
-                                tuple.second,
-                                tuple.first,
-                                table_type,
-                                feat_name,
-                                feat_dtype,
-                                feat_shape);
+    GetDownpourSparseTableProto(sparse_table_proto, tuple.second, tuple.first,
+                                table_type, feat_name, feat_dtype, feat_shape);
   }
-
-
 
   return worker_fleet_desc;
 }
@@ -310,10 +289,28 @@ std::vector<uint64_t> GraphPyClient::random_sample_nodes(std::string name,
   }
   return v;
 }
+
+// (name, dtype, ndarray)
+std::vector<std::vector<std::string > > 
+  GraphPyClient::get_node_feat(std::string node_type,
+                             std::vector<uint64_t> node_ids,
+                             std::vector<std::string> feature_names){
+
+  std::vector<std::vector<std::string> > v(feature_names.size(), 
+          std::vector<std::string>(node_ids.size()));
+  if (this->table_id_map.count(node_type)) {
+    uint32_t table_id = this->table_id_map[node_type];
+    auto status =
+        worker_ptr->get_node_feat(table_id, node_ids, feature_names, v);
+    status.wait();
+  }
+  return v;
+}
+
 std::vector<FeatureNode> GraphPyClient::pull_graph_list(std::string name,
-                                                      int server_index,
-                                                      int start, int size,
-                                                      int step) {
+                                                        int server_index,
+                                                        int start, int size,
+                                                        int step) {
   std::vector<FeatureNode> res;
   if (this->table_id_map.count(name)) {
     uint32_t table_id = this->table_id_map[name];
@@ -325,4 +322,3 @@ std::vector<FeatureNode> GraphPyClient::pull_graph_list(std::string name,
 }
 }
 }
-
