@@ -6,6 +6,7 @@
 #include "paddle/fluid/framework/tensor.h"
 #include "paddle/fluid/platform/place.h"
 #include "unordered_set"
+#include <iostream>
 
 namespace paddle {
 namespace operators {
@@ -104,7 +105,7 @@ class SparseBlockMatmulKernel : public framework::OpKernel<T> {
     // Compute Y Shape
     size_t batch_size = Q->dims()[0];
     size_t head_size = Q->dims()[1];
-    size_t seqlen = Q->dims()[2];
+    int seqlen = Q->dims()[2];
     size_t dim_size = Q->dims()[3];
     size_t non_zeros = BlockRow->dims()[0];
     size_t memset_size = batch_size * non_zeros * block_size * block_size;
@@ -122,6 +123,7 @@ class SparseBlockMatmulKernel : public framework::OpKernel<T> {
             for(int j = 0; j < block_size;j ++) {
                 for(size_t b = 0; b < batch_size; b ++) {
                     for(size_t d = 0; d < dim_size; d ++) {
+                        if( (block_col[index] * block_size + j >= seqlen) || (block_row[index] * block_size + i >= seqlen)) continue;
                         int out_index = (b * non_zeros + index) * block_size * block_size  + i * block_size + j;
                         p_output[out_index] += q_data[b * head_size* seqlen * dim_size + block_head[index]*seqlen*dim_size+ (block_row[index] * block_size + i) * dim_size +d] * k_data[b * head_size* seqlen * dim_size + block_head[index]*seqlen*dim_size+ (block_col[index] * block_size + j) * dim_size +d];
                     }
@@ -141,12 +143,12 @@ class SparseBlockMatmulGradMaker : public framework::SingleGradOpMaker<T> {
 
   void Apply(GradOpPtr<T> op) const override {
     op->SetType("sparse_block_matmul_grad");
+    op->SetInput("Q", this->Input("Q"));
+    op->SetInput("K", this->Input("K"));
     op->SetInput("Out", this->Output("Out"));
     op->SetInput("BlockRow", this->Input("BlockRow"));
     op->SetInput("BlockCol", this->Input("BlockCol"));
     op->SetInput("BlockHead", this->Input("BlockHead"));
-    op->SetInput("Q", this->Input("Q"));
-    op->SetInput("K", this->Input("K"));
     op->SetInput(framework::GradVarName("Out"), this->OutputGrad("Out"));
     op->SetAttrMap(this->Attrs());
     op->SetOutput(framework::GradVarName("Q"), this->InputGrad("Q"));
@@ -160,8 +162,8 @@ class SparseBlockMatmulGradOp : public framework::OperatorWithKernel {
   using framework::OperatorWithKernel::OperatorWithKernel;
 
   void InferShape(framework::InferShapeContext* ctx) const override {
-    auto q_dims = ctx->GetInputDim(this->Input("Q"));
-    auto k_dims = ctx->GetInputDim(this->Input("K"));
+    auto q_dims = ctx->GetInputDim("Q");
+    auto k_dims = ctx->GetInputDim("K");
     ctx->SetOutputDim(framework::GradVarName("Q"), q_dims);
     ctx->SetOutputDim(framework::GradVarName("K"), k_dims);
   }
@@ -210,7 +212,7 @@ class SparseBlockMatmulGradKernel : public framework::OpKernel<T> {
     // Compute Y Shape
     size_t batch_size = Q->dims()[0];
     size_t head_size = Q->dims()[1];
-    size_t seqlen = Q->dims()[2];
+    int seqlen = Q->dims()[2];
     size_t dim_size = Q->dims()[3];
     size_t non_zeros = BlockRow->dims()[0];
     const int32_t* block_row = BlockRow->data<int32_t>(); 
@@ -226,6 +228,7 @@ class SparseBlockMatmulGradKernel : public framework::OpKernel<T> {
             for(int j = 0; j < block_size;j ++) {
                 for(size_t b = 0; b < batch_size; b ++) {
                     for(size_t d = 0; d < dim_size; d ++) {
+                        if( (block_col[index] * block_size + j >= seqlen) || (block_row[index] * block_size + i >= seqlen)) continue;
                         int out_index = (b * non_zeros + index) * block_size * block_size  + i * block_size + j;
                         k_output[b * head_size* seqlen * dim_size + block_head[index]*seqlen*dim_size+ (block_col[index] * block_size + j) * dim_size +d] += out_grad[out_index] * q_data[b * head_size* seqlen * dim_size + block_head[index]*seqlen*dim_size+ (block_row[index] * block_size + i) * dim_size +d];
                         q_output[b * head_size* seqlen * dim_size + block_head[index]*seqlen*dim_size+ (block_row[index] * block_size + i) * dim_size +d] += out_grad[out_index] * k_data[b * head_size* seqlen * dim_size + block_head[index]*seqlen*dim_size+ (block_col[index] * block_size + j) * dim_size +d];
